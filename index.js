@@ -15,14 +15,25 @@ app.use(bodyParser.urlencoded({ extended: false }));
 // Serve static files (CSS, images, etc.)
 app.use(express.static('public'));
 
-const session = require('express-session');
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
 
-app.use(session({
-    secret: 'B3st3r@3126',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false }
-}));
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = 'B3st3r@3126';
+
+function generateToken(user) {
+    return jwt.sign({ id: user._id, username: user.username }, JWT_SECRET, { expiresIn: '1h' });
+}
+
+function authenticateJWT(req, res, next) {
+    const token = req.cookies.token;
+    if (!token) return res.redirect('/');
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) return res.redirect('/');
+        req.user = user;
+        next();
+    });
+}
 
 // Connect to MongoDB
 mongoose.connect('mongodb://localhost:27017/balanceSheet', { useNewUrlParser: true, useUnifiedTopology: true })
@@ -66,35 +77,19 @@ app.get('/register', (req, res) => {
     res.sendFile(path.join(_dirname, 'views', 'register.html'));
 });
 
-app.get('/index', (req, res) => {
-    if(!req.session.user) {
-        return res.redirect('/');
-    }
-     const successMessage = req.session.successMessage;
-    req.session.successMessage = null;
+app.get('/index',authenticateJWT, (req, res) => {
     res.sendFile(path.join(_dirname,'views','index.html'));
 });
 
-app.get('/income', (req, res) => {
-    if(!req.session.user) {
-        return res.redirect('/');
-    }
-    
+app.get('/income',authenticateJWT, (req, res) => {
     res.sendFile(path.join(_dirname,'views','income.html'));
 });
 
-app.get('/expense', (req, res) => {
-    if(!req.session.user) {
-        return res.redirect('/');
-    }
+app.get('/expense',authenticateJWT, (req, res) => {
     res.sendFile(path.join(_dirname,'views','expense.html'));
 });
 
-app.get('/balance', (req, res) => {
-    if(!req.session.user) {
-        return res.redirect('/');
-    }
-
+app.get('/balance',authenticateJWT, (req, res) => {
     res.sendFile(path.join(_dirname,'views','balance.html'));
 });
 
@@ -107,8 +102,8 @@ app.post('/login', async (req, res) => {
     if (user) {
         const match = await bcrypt.compare(password, user.password);
         if (match) {
-            req.session.user = { id: user._id, username: user.username };
-            console.log('Session set: ', req.session.user);
+            const token = generateToken(user);
+            res.cookie('token', token, { httpOnly: true, secure: false, sameSite: 'strict' });
             return res.redirect('/index');
         } else {
             return res.sendFile(path.join(_dirname, 'views', 'login.html'), { error: 'Incorrect password' });
@@ -136,21 +131,12 @@ app.post('/register', async (req, res) => {
     res.redirect('/');
 });
 // index Route
-app.get('/index', (req, res) => {
-    if (!req.session.user) {
-        return res.redirect('/');
-    }
-    const successMessage = req.session.successMessage;
-    req.session.successMessage = null;
+app.get('/index',authenticateJWT, (req, res) => {
     res.sendFile(path.join(_dirname, 'views', 'index.html'), );
 });
-app.post('/index', (req, res) => {
-    let { action } = req.body;
 
-    if (!req.session.user) {
-        console.log('User not logged in');
-        return res.redirect('/login');
-    }
+app.post('/index',authenticateJWT, (req, res) => {
+    let { action } = req.body;
    
     if (action === 'income') {
         res.redirect('/income');
@@ -164,12 +150,8 @@ app.post('/index', (req, res) => {
     
 });
 
-app.post('/income', async (req, res) => {
+app.post('/income',authenticateJWT, async (req, res) => {
     let { salary, business, grant, otherIncome } = req.body;
-     
-    if (!req.session.user) {
-        return res.redirect('/');
-    }
 
     // Example: Save income and source to the database
     let user = await User.findOne({ username: req.session.user.username });
@@ -183,7 +165,7 @@ app.post('/income', async (req, res) => {
         user.Totalincome = income; // Update income in the database
         
         await user.save();
-        req.session.successMessage = 'Income saved successfully';
+        let successMessage = 'Income saved successfully';
         res.redirect('/index'); // Redirect to index after saving
     } else {
         console.log('User not found');
@@ -191,7 +173,7 @@ app.post('/income', async (req, res) => {
     }
 });
 
-app.post('/expense', async (req, res) => {
+app.post('/expense',authenticateJWT, async (req, res) => {
     let { loans, rent, utilities, groceries, transportation, otherExpense  } = req.body;
 
     // Example: Save expense and category to the database
@@ -208,7 +190,7 @@ app.post('/expense', async (req, res) => {
         user.Totalexpense = expense; // Update expense in the database
 
         await user.save();
-        req.session.successMessage = 'Expenses saved successfully';
+        let successMessage = 'Expenses saved successfully';
         res.redirect('/index'); // Redirect to index after saving
     } else {
         console.log('User not found');
@@ -216,56 +198,46 @@ app.post('/expense', async (req, res) => {
     }
 });
 
-app.post('/balance', async (req, res) => {
-    if (!req.session.user) {
-        return res.redirect('/login');
-    }
+app.post('/balance',authenticateJWT, async (req, res) => {
 
     let user = await User.findOne({ username: req.session.user.username });
     if (user) {
         let balance = user.Totalincome - user.Totalexpense;
         user.balance = balance; // Update balance in the database
 
+        let Message = '';
         if (balance < 0.25 * user.Totalincome) {
-            req.session.Message = 'Warning: Balance is less than 25% of total income, please consider reducing unnecessary expenses.';
+            Message = 'Warning: Balance is less than 25% of total income, please consider reducing unnecessary expenses.';
         } else if (balance > 0.5 * user.Totalincome) {
-            req.session.Message = 'Good job! Your balance is more than 50% of your total income. Your savings are on track.';
+            Message = 'Good job! Your balance is more than 50% of your total income. Your savings are on track.';
         } else {
-            req.session.Message = 'Your balance is within the normal range [25%-50%]. You are managing your finances well.';
+            Message = 'Your balance is within the normal range [25%-50%]. You are managing your finances well.';
         }
-        user.balanceText = req.session.Message;
+        user.balanceText = Message;
         await user.save();
 
-        return res.json({ success: true, balance, balanceText: user.balanceText });
+        return res.json({ success: true, balance, balanceText: user.balanceText, Message });
     } else {
         console.log('User not found');
         return res.status(404).json({ success: false, message: 'User not found' });
     }
 });
 
-app.get('/api/userinfo', (req, res) => {
-    if (req.session.user) {
-        res.json({ username: req.session.user.username });
-    } else {
-        res.status(401).json({ username: null });
-    }
+app.get('/api/userinfo',authenticateJWT, (req, res) => {
+    res.json({ username: req.user.username });
 });
 
-app.get('/api/success-message', (req, res) => {
-    if (req.session.successMessage) {
-        res.json({ message: req.session.successMessage });
+app.get('/api/success-message',authenticateJWT, (req, res) => {
+    if (req.successMessage) {
+        res.json({ message: req.successMessage });
     } else {
         res.json({ message: null });
     }
 });
 
 app.get('/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) {
-            console.log(err);
-        }
-        res.redirect('/');
-    });
+    res.clearCookie('token');
+    res.redirect('/');
 });
 
 
