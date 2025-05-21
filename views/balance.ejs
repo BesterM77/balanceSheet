@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balance</title>
+    <link rel="stylesheet" href="/styles.css">
+
+    <!-- Bootstrap -->
+    <link href="/vendors/bootstrap/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="/vendors/font-awesome/css/font-awesome.min.css" rel="stylesheet">
+    <!-- NProgress -->
+    <link href="/vendors/nprogress/nprogress.css" rel="stylesheet">
+    <!-- Animate.css -->
+    <link href="/vendors/animate.css/animate.min.css" rel="stylesheet">
+
+    <!-- Custom Theme Style -->
+    <link href="/build/css/custom.min.css" rel="stylesheet">
+</head>
+<body>
+    <div style="align-items: center;">
+        <h1>This is <%= username %>'s</h1>
+    <h1>Balance</h1>
+     
+        <button id="viewBalanceButton" type="submit">View Balance</button>
+        <div class="clearfix"></div>
+        <br />
+        <br />
+        <div id="balanceDisplay"></div>
+        <div class="clearfix"></div>
+        <br />
+        <div id="commentDisplay"></div>
+        <div class="clearfix"></div>
+        <br />
+        <a style="margin-left: 50%; color: red;" href="/logout">Logout</a>
+    </div>
+    
+    <script>
+        document.getElementById('viewBalanceButton').addEventListener('click', async () => {
+            event.preventDefault();
+            try {
+                const response = await fetch('/balance', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    document.getElementById('balanceDisplay').textContent = `Your Balance:R ${data.balance}`;
+                    document.getElementById('commentDisplay').textContent = `Comment: ${data.balanceText}`;
+                } else {
+                    document.getElementById('balanceDisplay').textContent = `Error: ${data.message}`;
+                }
+            } catch (error) {
+                document.getElementById('balanceDisplay').textContent = `Error fetching balance`;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>
