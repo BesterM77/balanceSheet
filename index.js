@@ -62,11 +62,6 @@ let userSchema = new mongoose.Schema({
 
 const User = mongoose.model('User', userSchema);
 
-app.use((req, res, next) => {
-    res.locals.username = req.session.user ? req.session.user.username : null;
-    next();
-});
-
 // Home Route
 app.get('/', (req, res) => {
     res.sendFile(path.join(_dirname, 'views', 'login.html'));
