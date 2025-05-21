@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const bodyParser = require('body-parser');
+const path = require('path');
+const _dirname = path.resolve();
 
 // Set up Express app
 const app = express();
@@ -9,7 +11,6 @@ const port = 5000;
 
 // Middleware to parse form data
 app.use(bodyParser.urlencoded({ extended: false }));
-app.set('view engine', 'ejs');
 
 // Serve static files (CSS, images, etc.)
 app.use(express.static('public'));
@@ -57,44 +58,44 @@ app.use((req, res, next) => {
 
 // Home Route
 app.get('/', (req, res) => {
-    res.render('login');
+    res.sendFile(path.join(_dirname, 'views', 'login.html'));
 });
 
 // Register Route
 app.get('/register', (req, res) => {
-    res.render('register');
+    res.sendFile(path.join(_dirname, 'views', 'register.html'));
 });
 
-app.get('/menu', (req, res) => {
+app.get('/index', (req, res) => {
     if(!req.session.user) {
         return res.redirect('/');
     }
      const successMessage = req.session.successMessage;
     req.session.successMessage = null;
-    res.render('menu', { username: req.session.user.username, successMessage });
+    res.sendFile(path.join(_dirname,'views','index.html'));
 });
 
 app.get('/income', (req, res) => {
     if(!req.session.user) {
         return res.redirect('/');
     }
-    console.log('Rendering income page for:', req.session.user.username);
-    res.render('income', { username: req.session.user.username });
+    
+    res.sendFile(path.join(_dirname,'views','income.html'));
 });
 
 app.get('/expense', (req, res) => {
     if(!req.session.user) {
         return res.redirect('/');
     }
-    res.render('expense', { username: req.session.user.username });
+    res.sendFile(path.join(_dirname,'views','expense.html'));
 });
 
 app.get('/balance', (req, res) => {
     if(!req.session.user) {
         return res.redirect('/');
     }
-    
-    res.render('balance', { username: req.session.user.username });
+
+    res.sendFile(path.join(_dirname,'views','balance.html'));
 });
 
 // Login Validation Route
@@ -108,12 +109,12 @@ app.post('/login', async (req, res) => {
         if (match) {
             req.session.user = { id: user._id, username: user.username };
             console.log('Session set: ', req.session.user);
-            return res.redirect('/menu');
+            return res.redirect('/index');
         } else {
-            return res.render('login', { error: 'Incorrect password' });
+            return res.sendFile(path.join(_dirname, 'views', 'login.html'), { error: 'Incorrect password' });
         }
     } else {
-        return res.render('login', { error: 'User not found' });
+        return res.sendFile(path.join(_dirname, 'views', 'login.html'), { error: 'User not found' });
     }
 });
 
@@ -124,7 +125,7 @@ app.post('/register', async (req, res) => {
     // Check if username already exists
     const userExists = await User.findOne({ username: username });
     if (userExists) {
-         return res.render('register', { error: 'Username already taken' });
+         return res.sendFile(path.join(_dirname, 'views', 'register.html'), { error: 'Username already taken' });
     }
 
     // Hash password before saving
@@ -134,13 +135,21 @@ app.post('/register', async (req, res) => {
     await newUser.save();
     res.redirect('/');
 });
-
-app.post('/menu', (req, res) => {
+// index Route
+app.get('/index', (req, res) => {
+    if (!req.session.user) {
+        return res.redirect('/');
+    }
+    const successMessage = req.session.successMessage;
+    req.session.successMessage = null;
+    res.sendFile(path.join(_dirname, 'views', 'index.html'), );
+});
+app.post('/index', (req, res) => {
     let { action } = req.body;
 
     if (!req.session.user) {
         console.log('User not logged in');
-        return res.redirect('/');
+        return res.redirect('/login');
     }
    
     if (action === 'income') {
@@ -150,7 +159,7 @@ app.post('/menu', (req, res) => {
     } else if (action === 'balance') {
         res.redirect('/balance');
     } else {
-        res.redirect('/menu', {error: 'Invalid action'});
+        res.redirect('/index', {error: 'Invalid action'});
     }
     
 });
@@ -175,7 +184,7 @@ app.post('/income', async (req, res) => {
         
         await user.save();
         req.session.successMessage = 'Income saved successfully';
-        res.redirect('/menu'); // Redirect to menu after saving
+        res.redirect('/index'); // Redirect to index after saving
     } else {
         console.log('User not found');
         res.redirect('/income', {error: 'User not found'});
@@ -200,7 +209,7 @@ app.post('/expense', async (req, res) => {
 
         await user.save();
         req.session.successMessage = 'Expenses saved successfully';
-        res.redirect('/menu'); // Redirect to menu after saving
+        res.redirect('/index'); // Redirect to index after saving
     } else {
         console.log('User not found');
         res.redirect('/expense', {error: 'User not found'});
@@ -209,17 +218,17 @@ app.post('/expense', async (req, res) => {
 
 app.post('/balance', async (req, res) => {
     if (!req.session.user) {
-        return res.redirect('/');
+        return res.redirect('/login');
     }
 
     let user = await User.findOne({ username: req.session.user.username });
     if (user) {
         let balance = user.Totalincome - user.Totalexpense;
         user.balance = balance; // Update balance in the database
-        
-        if(balance < 0.25 * user.Totalincome) {
+
+        if (balance < 0.25 * user.Totalincome) {
             req.session.Message = 'Warning: Balance is less than 25% of total income, please consider reducing unnecessary expenses.';
-        }else if (balance > 0.5 * user.Totalincome) {
+        } else if (balance > 0.5 * user.Totalincome) {
             req.session.Message = 'Good job! Your balance is more than 50% of your total income. Your savings are on track.';
         } else {
             req.session.Message = 'Your balance is within the normal range [25%-50%]. You are managing your finances well.';
@@ -234,6 +243,21 @@ app.post('/balance', async (req, res) => {
     }
 });
 
+app.get('/api/userinfo', (req, res) => {
+    if (req.session.user) {
+        res.json({ username: req.session.user.username });
+    } else {
+        res.status(401).json({ username: null });
+    }
+});
+
+app.get('/api/success-message', (req, res) => {
+    if (req.session.successMessage) {
+        res.json({ message: req.session.successMessage });
+    } else {
+        res.json({ message: null });
+    }
+});
 
 app.get('/logout', (req, res) => {
     req.session.destroy((err) => {
