@@ -36,7 +36,7 @@ function authenticateJWT(req, res, next) {
 }
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/balanceSheet', { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
     .then(() => console.log('MongoDB Connected'))
     .catch((err) => console.log('Error connecting to MongoDB: ', err));
 
