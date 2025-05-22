@@ -7,7 +7,6 @@ const _dirname = path.resolve();
 
 // Set up Express app
 const app = express();
-const port = 5000;
 
 // Middleware to parse form data
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -235,8 +234,3 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
 });
 
-
-// Start server
-app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
-});
